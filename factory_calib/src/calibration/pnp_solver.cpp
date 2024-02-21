@@ -550,7 +550,8 @@ struct ZCostFunctorPnP
 };
 
 bool solvePnPbyInitialParams(std::vector< std::vector<float> >& objpoints,  std::vector< std::vector<float> >& imgpoints, 
-	 std::vector< std::vector<double> >& camera_intrinsic,  std::vector<double>& dist_coeffs, std::vector<float>& rvec, std::vector<float>& tvec){
+	 std::vector< std::vector<double> >& camera_intrinsic,  std::vector<double>& dist_coeffs, std::vector<float>& rvec, std::vector<float>& tvec)
+{
 	double rot[3];
 	double tra[3];
 	rot[0] = rvec[0];
@@ -561,7 +562,7 @@ bool solvePnPbyInitialParams(std::vector< std::vector<float> >& objpoints,  std:
 	tra[2] = tvec[2];
 
 	ceres::Problem problem;
-	for (int i = 0; i < imgpoints.size(); i++)
+	for (size_t i = 0; i < imgpoints.size(); i++)
 	{
 		ceres::CostFunction* cost = XCostFunctorPnP::create(objpoints[i], imgpoints[i], camera_intrinsic, dist_coeffs, tra);
 		problem.AddResidualBlock(cost, nullptr, rot, tra);
@@ -585,6 +586,38 @@ bool solvePnPbyInitialParams(std::vector< std::vector<float> >& objpoints,  std:
     return true;
 }
 
+
+// 定义轴角参数化的 Local Parameterization
+class AxisAngleParameterization : public ceres::LocalParameterization {
+public:
+    virtual bool Plus(const double* x, const double* delta, double* x_plus_delta) const {
+        // x_plus_delta = x * exp(delta)
+        Eigen::Map<const Eigen::Vector3d> x_map(x);
+        Eigen::Map<const Eigen::Vector3d> delta_map(delta);
+        Eigen::Map<Eigen::Vector3d> x_plus_delta_map(x_plus_delta);
+
+        Eigen::Quaterniond x_quaternion(Eigen::AngleAxisd(x_map.norm(), x_map.normalized()));
+        Eigen::Quaterniond delta_quaternion(Eigen::AngleAxisd(delta_map.norm(), delta_map.normalized()));
+
+        Eigen::Quaterniond result_quaternion = x_quaternion * delta_quaternion;
+
+        Eigen::AngleAxisd result_angle_axis(result_quaternion);
+
+        x_plus_delta_map = result_angle_axis.axis() * result_angle_axis.angle();
+        return true;
+    }
+
+    virtual bool ComputeJacobian(const double* x, double* jacobian) const {
+        // 计算 Jacobian 矩阵
+        Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> jacobian_map(jacobian);
+        jacobian_map.setIdentity();
+        return true;
+    }
+
+    virtual int GlobalSize() const { return 3; }
+    virtual int LocalSize() const { return 3; }
+};
+
 bool solveCamPnP(std::vector< std::vector<float> >& objpoints,  std::vector< std::vector<float> >& imgpoints, 
 	 std::vector< std::vector<double> >& camera_intrinsic,  std::vector<double>& dist_coeffs, std::vector<float>& rvec, std::vector<float>& tvec){
 	double rot[3];
@@ -602,6 +635,8 @@ bool solveCamPnP(std::vector< std::vector<float> >& objpoints,  std::vector< std
 		ceres::CostFunction* cost = ZCostFunctorPnP::create(objpoints[i], imgpoints[i], camera_intrinsic, dist_coeffs, tra);
 		problem.AddResidualBlock(cost, nullptr, rot, tra);
 	}
+    problem.AddParameterBlock(rot, 3, new AxisAngleParameterization);
+    problem.AddParameterBlock(tra, 3);
 
 	ceres::Solver::Options options;
 	options.linear_solver_type = ceres::DENSE_SCHUR;
@@ -633,7 +668,7 @@ bool solveLidarPnP(std::vector< std::vector<float> >& objpoints,  std::vector< s
 	tra[2] = tvec[2];
 
 	ceres::Problem problem;
-	for (int i = 0; i < lidarpoints.size(); i++)
+	for (size_t i = 0; i < lidarpoints.size(); i++)
 	{
 		ceres::CostFunction* cost = YCostFunctorPnP::create(objpoints[i], lidarpoints[i],tra);
 		problem.AddResidualBlock(cost, nullptr, rot, tra);

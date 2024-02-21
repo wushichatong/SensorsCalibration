@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
   }
   // convert image to gray vector
   cv::Mat gray, gray_img;
-  cv::cvtColor(image, gray, CV_BGR2GRAY);
+  cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
   gray.convertTo(gray_img, CV_32F);
 
   std::vector<std::vector<float>> gray_vec;

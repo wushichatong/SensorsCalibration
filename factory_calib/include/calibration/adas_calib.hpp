@@ -83,6 +83,7 @@ public:
   bool setDisplay(const cv::Mat &img) {
     image_ = img;
     display_img_ = true;
+    return true;
   }
 
   /*

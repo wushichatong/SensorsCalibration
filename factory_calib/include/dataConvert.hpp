@@ -35,8 +35,8 @@ static void stdvec2cvmat(const std::vector<std::vector<bool>> &img) {
 static void stdvec2cvmat(const std::vector<std::vector<float>> &img,
                          cv::Mat &dest) {
   std::vector<float> img_uchar;
-  for (int i = 0; i < img.size(); i++) {
-    for (int j = 0; j < img[0].size(); j++) {
+  for (size_t i = 0; i < img.size(); i++) {
+    for (size_t j = 0; j < img[0].size(); j++) {
       img_uchar.push_back(static_cast<float>(img[i][j]));
     }
   }
@@ -48,8 +48,8 @@ static void stdvec2cvmat(const std::vector<std::vector<float>> &img,
 static void stdvec2cvmat(const std::vector<std::vector<int>> &img,
                          cv::Mat &dest) {
   std::vector<float> img_uchar;
-  for (int i = 0; i < img.size(); i++) {
-    for (int j = 0; j < img[0].size(); j++) {
+  for (size_t i = 0; i < img.size(); i++) {
+    for (size_t j = 0; j < img[0].size(); j++) {
       img_uchar.push_back(static_cast<float>(img[i][j]));
     }
   }
@@ -63,8 +63,8 @@ static void cvmat2stdvec(const cv::Mat &src,
   img.resize(src.rows, std::vector<float>(src.cols));
   std::cout << "img.size(): " << img.size() << std::endl;
   std::cout << "img[0].size(): " << img[0].size() << std::endl;
-  for (int i = 0; i < img.size(); i++) {
-    for (int j = 0; j < img[0].size(); j++) {
+  for (size_t i = 0; i < img.size(); i++) {
+    for (size_t j = 0; j < img[0].size(); j++) {
       img[i][j] = src.at<float>(i, j);
       // img[i][j] = float(src.at<unsigned char>(i,j));
     }

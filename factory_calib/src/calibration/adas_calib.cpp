@@ -69,7 +69,7 @@ bool CalibrationBoardTool::ChessBoardCalibration(
     color_box.emplace_back(cv::Scalar(80, 80, 235));
     color_box.emplace_back(cv::Scalar(200, 0, 200));
     cv::Mat display_img = image_.clone();
-    for (int i = 0; i < grid_center_points.size(); ++i) {
+    for (size_t i = 0; i < grid_center_points.size(); ++i) {
       cv::Point2f cv_pt;
       cv_pt.x = grid_center_points[i].x;
       cv_pt.y = grid_center_points[i].y;
@@ -456,8 +456,8 @@ bool CalibrationBoardTool::CircleBoardCalibration(
     color_box.emplace_back(cv::Scalar(80, 80, 235));
     color_box.emplace_back(cv::Scalar(200, 0, 200));
     cv::Mat display_img = image_.clone();
-    for (int i = 0; i < corners.points.size(); ++i) {
-      for (int j = 0; j < corners.points[i].size(); ++j) {
+    for (size_t i = 0; i < corners.points.size(); ++i) {
+      for (size_t j = 0; j < corners.points[i].size(); ++j) {
         Point2f pt = corners.points[i][j];
         if (pt.x < 1)
           continue;

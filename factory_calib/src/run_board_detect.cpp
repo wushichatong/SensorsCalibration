@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
   }
   // convert image to gray vector
   cv::Mat gray, gray_img;
-  cv::cvtColor(image, gray, CV_BGR2GRAY);
+  cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
   gray.convertTo(gray_img, CV_32F);
   std::vector<std::vector<float>> gray_vec;
   cvmat2stdvec(gray_img, gray_vec);
@@ -200,9 +200,10 @@ int main(int argc, char **argv) {
     if (detections.size() == 36)
       sta = true;
     if (display_img && sta) {
-      for (int i = 0; i < detections.size(); i++) {
+      for (size_t i = 0; i < detections.size(); i++) {
         // also highlight in the image
         detections[i].draw(image);
+        std::cout<<"tag"<< i<<": "<<detections[i].cxy.first<<" "<<detections[i].cxy.second<<std::endl;
       }
       cv::imshow("apriltags", image);
       cv::waitKey();
