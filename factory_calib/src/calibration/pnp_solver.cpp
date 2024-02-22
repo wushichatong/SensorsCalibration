@@ -473,49 +473,57 @@ struct ZCostFunctorPnP
 		point_in[0] = T(object_point_[0]);
 		point_in[1] = T(object_point_[1]);
 		point_in[2] = T(object_point_[2]);
-		// rotation
-        T theta=sqrt(rot[0]*rot[0]+rot[1]*rot[1]+rot[2]*rot[2]);
-        T rx=rot[0]/theta;
-        T ry=rot[1]/theta;
-        T rz=rot[2]/theta;
-        Eigen::Matrix<T,4,4> extrin;
-        extrin(0,0)=T(0.0);
-        extrin(0,1)=sin(theta)*(-rz);
-        extrin(0,2)=sin(theta)*(ry);
-        extrin(0,3)=T(tra_[0]);
-        extrin(1,0)=sin(theta)*(rz);
-        extrin(1,1)=T(0.0);
-        extrin(1,2)=sin(theta)*(-rx);
-        extrin(1,3)=T(tra_[1]);
-        extrin(2,0)=sin(theta)*(-ry);
-        extrin(2,1)=sin(theta)*(rx);
-        extrin(2,2)=T(0.0);
-        extrin(2,3)=T(tra_[2]);
-        extrin(3,0)=T(0.0);
-        extrin(3,1)=T(0.0);
-        extrin(3,2)=T(0.0);
-        extrin(3,3)=T(1.0);
-        Eigen::Matrix<T,3,1> r;
-        r(0,0)=rx;
-        r(1,0)=ry;
-        r(2,0)=rz;
-        Eigen::Matrix<T,3,3> rr=(T(1.0)-cos(theta))*r*r.transpose();
-        for(int i=0;i<3;i++)
-            for(int j=0;j<3;j++)
-                extrin(i,j)+=rr(i,j);
-        for(int i=0;i<3;i++)
-            extrin(i,i)+=cos(theta);
-        extrin=extrin.inverse().eval();
-        Eigen::Matrix<T,4,1> pt_in;
-        pt_in(0,0)=point_in[0];
-        pt_in(1,0)=point_in[1];
-        pt_in(2,0)=point_in[2];
-        pt_in(3,0)=T(1.0);
-        Eigen::Matrix<T,4,1> pt_out=extrin*pt_in;
-        point_out[0]=pt_out(0,0);
-        point_out[1]=pt_out(1,0);
-        point_out[2]=pt_out(2,0);
-		
+		// // rotation
+        // T theta=sqrt(rot[0]*rot[0]+rot[1]*rot[1]+rot[2]*rot[2]);
+        // T rx=rot[0]/theta;
+        // T ry=rot[1]/theta;
+        // T rz=rot[2]/theta;
+        // Eigen::Matrix<T,4,4> extrin;
+        // extrin(0,0)=T(0.0);
+        // extrin(0,1)=sin(theta)*(-rz);
+        // extrin(0,2)=sin(theta)*(ry);
+        // extrin(0,3)=T(tra_[0]);
+        // extrin(1,0)=sin(theta)*(rz);
+        // extrin(1,1)=T(0.0);
+        // extrin(1,2)=sin(theta)*(-rx);
+        // extrin(1,3)=T(tra_[1]);
+        // extrin(2,0)=sin(theta)*(-ry);
+        // extrin(2,1)=sin(theta)*(rx);
+        // extrin(2,2)=T(0.0);
+        // extrin(2,3)=T(tra_[2]);
+        // extrin(3,0)=T(0.0);
+        // extrin(3,1)=T(0.0);
+        // extrin(3,2)=T(0.0);
+        // extrin(3,3)=T(1.0);
+        // Eigen::Matrix<T,3,1> r;
+        // r(0,0)=rx;
+        // r(1,0)=ry;
+        // r(2,0)=rz;
+        // Eigen::Matrix<T,3,3> rr=(T(1.0)-cos(theta))*r*r.transpose();
+        // for(int i=0;i<3;i++)
+        //     for(int j=0;j<3;j++)
+        //         extrin(i,j)+=rr(i,j);
+        // for(int i=0;i<3;i++)
+        //     extrin(i,i)+=cos(theta);
+        // extrin=extrin.inverse().eval();
+
+        // Eigen::Matrix<T,4,1> pt_out=extrin*pt_in;
+
+        // 将轴角参数分配给Eigen类型
+        Eigen::Map<const Eigen::Matrix<T, 3, 1>> axis_angle(rot);
+        Eigen::Map<const Eigen::Matrix<T, 3, 1>> translation_vector(tra);
+        Eigen::Map<const Eigen::Matrix<T, 3, 1>> pt_in(point_in);
+
+        // 构造旋转矩阵
+        Eigen::Matrix<T, 3, 3> rotation_matrix = Eigen::AngleAxis<T>(axis_angle.norm(), axis_angle.normalized()).toRotationMatrix();
+
+        // 刚体变换公式：transformed_point = R * source_point + translation
+        Eigen::Matrix<T, 3, 1> transformed_point = rotation_matrix * pt_in + translation_vector;
+
+        point_out[0] = transformed_point(0, 0);
+        point_out[1] = transformed_point(1, 0);
+        point_out[2] = transformed_point(2, 0);
+		 
 		// projection 
 		T x = point_out[0] / point_out[2];
 		T y = point_out[1] / point_out[2];
@@ -542,11 +550,43 @@ struct ZCostFunctorPnP
 	}
 
 	static ceres::CostFunction* create( std::vector<float> objpoint, 
-		 std::vector<float> imgpoint,  std::vector< std::vector<double> > camera_intrinsic,  std::vector<double> dist_coeffs,double *tra)
+		 std::vector<float> imgpoint,  std::vector< std::vector<double> > camera_intrinsic,  std::vector<double> dist_coeffs, double *tra)
 	{
 		return new ceres::AutoDiffCostFunction<ZCostFunctorPnP, 2, 3, 3>
-			(new ZCostFunctorPnP(objpoint, imgpoint, camera_intrinsic, dist_coeffs,tra));
+			(new ZCostFunctorPnP(objpoint, imgpoint, camera_intrinsic, dist_coeffs, tra));
 	}
+};
+// 定义轴角参数化的 Local Parameterization
+class AxisAngleParameterization : public ceres::LocalParameterization {
+public:
+    virtual bool Plus(const double* x, const double* delta, double* x_plus_delta) const {
+        // x_plus_delta = x * exp(delta)
+        Eigen::Map<const Eigen::Vector3d> x_map(x);
+        Eigen::Map<const Eigen::Vector3d> delta_map(delta);
+        Eigen::Map<Eigen::Vector3d> x_plus_delta_map(x_plus_delta);
+
+
+        Eigen::Quaterniond x_quaternion(Eigen::AngleAxisd(x_map.norm(), x_map.normalized()));
+        Eigen::Quaterniond delta_quaternion(Eigen::AngleAxisd(delta_map.norm(), delta_map.normalized()));
+        
+        Eigen::Quaterniond x_plus_quaternion = x_quaternion * delta_quaternion ;
+
+        // 将四元数转换为轴角
+        Eigen::AngleAxisd axis_angle(x_plus_quaternion);
+        x_plus_delta_map = axis_angle.axis() * axis_angle.angle();// result_quaternion.coeffs().segment(1, 3);
+
+        return true;
+    }
+
+    virtual bool ComputeJacobian(const double* x, double* jacobian) const {
+        // 计算 Jacobian 矩阵
+        Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> jacobian_map(jacobian);
+        jacobian_map.setIdentity();
+        return true;
+    }
+
+    virtual int GlobalSize() const { return 3; }
+    virtual int LocalSize() const { return 3; }
 };
 
 bool solvePnPbyInitialParams(std::vector< std::vector<float> >& objpoints,  std::vector< std::vector<float> >& imgpoints, 
@@ -562,6 +602,8 @@ bool solvePnPbyInitialParams(std::vector< std::vector<float> >& objpoints,  std:
 	tra[2] = tvec[2];
 
 	ceres::Problem problem;
+    problem.AddParameterBlock(rot, 3, new AxisAngleParameterization);
+    problem.AddParameterBlock(tra, 3);
 	for (size_t i = 0; i < imgpoints.size(); i++)
 	{
 		ceres::CostFunction* cost = XCostFunctorPnP::create(objpoints[i], imgpoints[i], camera_intrinsic, dist_coeffs, tra);
@@ -587,36 +629,6 @@ bool solvePnPbyInitialParams(std::vector< std::vector<float> >& objpoints,  std:
 }
 
 
-// 定义轴角参数化的 Local Parameterization
-class AxisAngleParameterization : public ceres::LocalParameterization {
-public:
-    virtual bool Plus(const double* x, const double* delta, double* x_plus_delta) const {
-        // x_plus_delta = x * exp(delta)
-        Eigen::Map<const Eigen::Vector3d> x_map(x);
-        Eigen::Map<const Eigen::Vector3d> delta_map(delta);
-        Eigen::Map<Eigen::Vector3d> x_plus_delta_map(x_plus_delta);
-
-        Eigen::Quaterniond x_quaternion(Eigen::AngleAxisd(x_map.norm(), x_map.normalized()));
-        Eigen::Quaterniond delta_quaternion(Eigen::AngleAxisd(delta_map.norm(), delta_map.normalized()));
-
-        Eigen::Quaterniond result_quaternion = x_quaternion * delta_quaternion;
-
-        Eigen::AngleAxisd result_angle_axis(result_quaternion);
-
-        x_plus_delta_map = result_angle_axis.axis() * result_angle_axis.angle();
-        return true;
-    }
-
-    virtual bool ComputeJacobian(const double* x, double* jacobian) const {
-        // 计算 Jacobian 矩阵
-        Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> jacobian_map(jacobian);
-        jacobian_map.setIdentity();
-        return true;
-    }
-
-    virtual int GlobalSize() const { return 3; }
-    virtual int LocalSize() const { return 3; }
-};
 
 bool solveCamPnP(std::vector< std::vector<float> >& objpoints,  std::vector< std::vector<float> >& imgpoints, 
 	 std::vector< std::vector<double> >& camera_intrinsic,  std::vector<double>& dist_coeffs, std::vector<float>& rvec, std::vector<float>& tvec){
@@ -630,13 +642,14 @@ bool solveCamPnP(std::vector< std::vector<float> >& objpoints,  std::vector< std
 	tra[2] = tvec[2];
 
 	ceres::Problem problem;
+    problem.AddParameterBlock(rot, 3, new AxisAngleParameterization);
+    problem.AddParameterBlock(tra, 3);
 	for (int i = 0; i < imgpoints.size(); i++)
 	{
 		ceres::CostFunction* cost = ZCostFunctorPnP::create(objpoints[i], imgpoints[i], camera_intrinsic, dist_coeffs, tra);
 		problem.AddResidualBlock(cost, nullptr, rot, tra);
 	}
-    problem.AddParameterBlock(rot, 3, new AxisAngleParameterization);
-    problem.AddParameterBlock(tra, 3);
+
 
 	ceres::Solver::Options options;
 	options.linear_solver_type = ceres::DENSE_SCHUR;
@@ -646,6 +659,9 @@ bool solveCamPnP(std::vector< std::vector<float> >& objpoints,  std::vector< std
 
 	ceres::Solver::Summary summary;
 	ceres::Solve(options, &problem, &summary);
+
+    // 输出优化结果
+    std::cout << summary.BriefReport() << std::endl;
 
     rvec[0] = rot[0];
 	rvec[1] = rot[1];

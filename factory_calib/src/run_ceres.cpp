@@ -4,29 +4,73 @@
 #include <vector>
 
 // 定义刚体变换残差结构体
-struct RigidTransformResidual {
-    RigidTransformResidual(const Eigen::Vector3d& model_point, const Eigen::Vector3d& measured_point)
-        : model_point_(model_point), measured_point_(measured_point) {}
+// 刚体变换的轴角表示残差结构体
+struct RigidBodyTransformResidual {
+    RigidBodyTransformResidual(const Eigen::Vector3d& source, const Eigen::Vector3d& target)
+        : source_point(source), target_point(target) {}
 
     template <typename T>
-    bool operator()(const T* const rotation, const T* const translation, T* residual) const {
-        // 刚体变换：旋转 + 平移
-        Eigen::Matrix<T, 3, 1> transformed_point;
-        for (int i = 0; i < 3; ++i) {
-            transformed_point(i) = rotation[i] * model_point_(i) + translation[i];
-        }
+    bool operator()(const T* const rotation_params, const T* const translation, T* residuals) const {
+        // 将轴角参数分配给Eigen类型
+        Eigen::Map<const Eigen::Matrix<T, 3, 1>> axis_angle(rotation_params);
+        Eigen::Map<const Eigen::Matrix<T, 3, 1>> translation_vector(translation);
 
-        // 计算残差（测量点和变换后的模型点之差）
-        for (int i = 0; i < 3; ++i) {
-            residual[i] = transformed_point(i) - measured_point_.cast<T>()(i);
-        }
+        // 构造旋转矩阵
+        Eigen::Matrix<T, 3, 3> rotation_matrix = Eigen::AngleAxis<T>(axis_angle.norm(), axis_angle.normalized()).toRotationMatrix();
+
+        // 刚体变换公式：transformed_point = R * source_point + translation
+        Eigen::Matrix<T, 3, 1> transformed_point = rotation_matrix * source_point.cast<T>() + translation_vector;
+
+        // 计算残差：目标点与变换后的源点之间的差异
+        Eigen::Map<Eigen::Matrix<T, 3, 1>> residuals_map(residuals);
+        residuals_map = transformed_point - target_point.cast<T>();
 
         return true;
     }
 
+    static ceres::CostFunction* Create(const Eigen::Vector3d& source, const Eigen::Vector3d& target) {
+        return new ceres::AutoDiffCostFunction<RigidBodyTransformResidual, 3, 3, 3>(
+            new RigidBodyTransformResidual(source, target)
+        );
+    }
+
 private:
-    const Eigen::Vector3d model_point_;
-    const Eigen::Vector3d measured_point_;
+    Eigen::Vector3d source_point;  // 本体坐标系中的点
+    Eigen::Vector3d target_point;  // 全局坐标系中的点
+};
+
+
+// 定义轴角参数化的 Local Parameterization
+class AxisAngleParameterization : public ceres::LocalParameterization {
+public:
+    virtual bool Plus(const double* x, const double* delta, double* x_plus_delta) const {
+        // x_plus_delta = x * exp(delta)
+        Eigen::Map<const Eigen::Vector3d> x_map(x);
+        Eigen::Map<const Eigen::Vector3d> delta_map(delta);
+        Eigen::Map<Eigen::Vector3d> x_plus_delta_map(x_plus_delta);
+
+
+        Eigen::Quaterniond x_quaternion(Eigen::AngleAxisd(x_map.norm(), x_map.normalized()));
+        Eigen::Quaterniond delta_quaternion(Eigen::AngleAxisd(delta_map.norm(), delta_map.normalized()));
+        
+        Eigen::Quaterniond x_plus_quaternion = x_quaternion * delta_quaternion ;
+
+        // 将四元数转换为轴角
+        Eigen::AngleAxisd axis_angle(x_plus_quaternion);
+        x_plus_delta_map = axis_angle.axis() * axis_angle.angle();// result_quaternion.coeffs().segment(1, 3);
+
+        return true;
+    }
+
+    virtual bool ComputeJacobian(const double* x, double* jacobian) const {
+        // 计算 Jacobian 矩阵
+        Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> jacobian_map(jacobian);
+        jacobian_map.setIdentity();
+        return true;
+    }
+
+    virtual int GlobalSize() const { return 3; }
+    virtual int LocalSize() const { return 3; }
 };
 
 int main() {
@@ -34,9 +78,9 @@ int main() {
     ceres::Problem problem;
 
     // 添加参数块（旋转和平移）
-    double rotation[3] = {0.1, 0.2, 0.3};  // 初始旋转
-    double translation[3] = {1.0, 2.0, 3.0};  // 初始平移
-    problem.AddParameterBlock(rotation, 3);
+    double rotation[3] = {0.01, 0.0, 0.0};  // 初始旋转
+    double translation[3] = {1.0, 2.0, 5.0};  // 初始平移
+    problem.AddParameterBlock(rotation, 3, new AxisAngleParameterization);
     problem.AddParameterBlock(translation, 3);
 
     // 添加多个点对的残差项（刚体变换）
@@ -47,15 +91,15 @@ int main() {
     };
 
     std::vector<Eigen::Vector3d> measured_points{
-        Eigen::Vector3d(2.0, 2.0, 3.0),
-        Eigen::Vector3d(3.0, 4.0, 5.0),
-        Eigen::Vector3d(4.0, 5.0, 6.0)
+        Eigen::Vector3d(1.0, 1.0, 1.0),
+        Eigen::Vector3d(0.0, 2.0, 1.0),
+        Eigen::Vector3d(0.0, 1.0, 2.0)
     };
 
     for (size_t i = 0; i < model_points.size(); ++i) {
         ceres::CostFunction* cost_function =
-            new ceres::AutoDiffCostFunction<RigidTransformResidual, 3, 3, 3>(
-                new RigidTransformResidual(model_points[i], measured_points[i])
+            new ceres::AutoDiffCostFunction<RigidBodyTransformResidual, 3, 3, 3>(
+                new RigidBodyTransformResidual(model_points[i], measured_points[i])
             );
 
         problem.AddResidualBlock(cost_function, nullptr, rotation, translation);

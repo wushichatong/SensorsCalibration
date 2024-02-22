@@ -86,19 +86,18 @@ int main(int argc, char **argv)
         // 轴角表示
         std::vector<float> rvec, tvec;                            // calibration result
         rvec = {0.01, 0.01, 0.01};
-        tvec = {0.12, -0.0517, 0.34};
+        tvec = {0.12, -0.0517, 0.348};
         solveCamPnP(obj_pts, pts2d, intrinsic, distortion, rvec, tvec); // solver
+        printf("rvec");
         for(size_t i = 0; i < rvec.size(); i++){
             printf(" : %f", rvec[i]);
         }
         printf("\n");
+        printf("tvec");
         for(size_t i = 0; i < tvec.size(); i++){
             printf(" : %f", tvec[i]);
         }
         printf("\n");
-
-
-
     }
 
     return 0;
